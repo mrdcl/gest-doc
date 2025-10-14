@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, LogOut, User, Search, RefreshCw, Users, Shield, Bell } from 'lucide-react';
+import { FileText, LogOut, User, Search, RefreshCw, Users, Shield, Bell, Tag, Trash2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ClientList from './ClientList';
 import EntityList from './EntityList';
@@ -11,6 +11,8 @@ import UserManagement from './UserManagement';
 import AuditLog from './AuditLog';
 import TwoFactorAuth from './TwoFactorAuth';
 import NotificationCenter from './NotificationCenter';
+import TagManager from './TagManager';
+import RecycleBin from './RecycleBin';
 import { useNotifications } from '../hooks/useNotifications';
 
 type ViewState =
@@ -18,7 +20,9 @@ type ViewState =
   | { type: 'entities'; clientId: string }
   | { type: 'documents'; entityId: string; clientId: string }
   | { type: 'users' }
-  | { type: 'audit' };
+  | { type: 'audit' }
+  | { type: 'tags' }
+  | { type: 'recycle' };
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth();
@@ -105,6 +109,22 @@ export default function Dashboard() {
                     <Shield className="w-4 h-4" />
                     <span className="hidden sm:inline">Auditoría</span>
                   </button>
+                  <button
+                    onClick={() => setViewState({ type: 'tags' })}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Gestión de etiquetas"
+                  >
+                    <Tag className="w-4 h-4" />
+                    <span className="hidden sm:inline">Etiquetas</span>
+                  </button>
+                  <button
+                    onClick={() => setViewState({ type: 'recycle' })}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Papelera de reciclaje"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Papelera</span>
+                  </button>
                 </>
               )}
               <div className="flex items-center gap-2 text-sm">
@@ -169,6 +189,30 @@ export default function Dashboard() {
 
         {viewState.type === 'audit' && (
           <AuditLog onBack={() => setViewState({ type: 'clients' })} />
+        )}
+
+        {viewState.type === 'tags' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <button
+              onClick={() => setViewState({ type: 'clients' })}
+              className="mb-6 p-2 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center gap-2 text-gray-600"
+            >
+              ← Volver
+            </button>
+            <TagManager />
+          </div>
+        )}
+
+        {viewState.type === 'recycle' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <button
+              onClick={() => setViewState({ type: 'clients' })}
+              className="mb-6 p-2 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center gap-2 text-gray-600"
+            >
+              ← Volver
+            </button>
+            <RecycleBin />
+          </div>
         )}
       </main>
 

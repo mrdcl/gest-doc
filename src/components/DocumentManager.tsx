@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2, Eye } from 'lucide-react';
+import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2, Eye, Tag as TagIcon, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { processDocumentOCR } from '../lib/ocrService';
 import DocumentViewer from './DocumentViewer';
