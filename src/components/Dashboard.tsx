@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, LogOut, User, Search, RefreshCw, Users } from 'lucide-react';
+import { FileText, LogOut, User, Search, RefreshCw, Users, Shield } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ClientList from './ClientList';
 import EntityList from './EntityList';
@@ -8,18 +8,22 @@ import DocumentManager from './DocumentManager';
 import DocumentSearch from './DocumentSearch';
 import OCRReprocessor from './OCRReprocessor';
 import UserManagement from './UserManagement';
+import AuditLog from './AuditLog';
+import TwoFactorAuth from './TwoFactorAuth';
 
 type ViewState =
   | { type: 'clients' }
   | { type: 'entities'; clientId: string }
   | { type: 'documents'; entityId: string; clientId: string }
-  | { type: 'users' };
+  | { type: 'users' }
+  | { type: 'audit' };
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth();
   const [viewState, setViewState] = useState<ViewState>({ type: 'clients' });
   const [showSearch, setShowSearch] = useState(false);
   const [showOCRReprocessor, setShowOCRReprocessor] = useState(false);
+  const [show2FA, setShow2FA] = useState(false);
 
   const getRoleName = (role: string) => {
     switch (role) {
@@ -76,6 +80,14 @@ export default function Dashboard() {
                     <Users className="w-4 h-4" />
                     <span className="hidden sm:inline">Usuarios</span>
                   </button>
+                  <button
+                    onClick={() => setViewState({ type: 'audit' })}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Registro de auditoría"
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span className="hidden sm:inline">Auditoría</span>
+                  </button>
                 </>
               )}
               <div className="flex items-center gap-2 text-sm">
@@ -85,6 +97,14 @@ export default function Dashboard() {
                   {getRoleName(profile?.role || 'user')}
                 </span>
               </div>
+              <button
+                onClick={() => setShow2FA(true)}
+                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Configurar 2FA"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline">2FA</span>
+              </button>
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -129,6 +149,10 @@ export default function Dashboard() {
         {viewState.type === 'users' && (
           <UserManagement onBack={() => setViewState({ type: 'clients' })} />
         )}
+
+        {viewState.type === 'audit' && (
+          <AuditLog onBack={() => setViewState({ type: 'clients' })} />
+        )}
       </main>
 
       {showSearch && (
@@ -143,6 +167,10 @@ export default function Dashboard() {
 
       {showOCRReprocessor && (
         <OCRReprocessor onClose={() => setShowOCRReprocessor(false)} />
+      )}
+
+      {show2FA && (
+        <TwoFactorAuth onClose={() => setShow2FA(false)} />
       )}
     </div>
   );
