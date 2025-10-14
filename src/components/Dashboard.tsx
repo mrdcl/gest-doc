@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, LogOut, User, Search, RefreshCw, Users, Shield, Bell, Tag, Trash2 } from 'lucide-react';
+import { FileText, LogOut, User, Search, RefreshCw, Users, Shield, Bell, Tag, Trash2, ChevronDown, Settings, Lock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ClientList from './ClientList';
 import EntityList from './EntityList';
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [showOCRReprocessor, setShowOCRReprocessor] = useState(false);
   const [show2FA, setShow2FA] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const { unreadCount } = useNotifications();
 
   const getRoleName = (role: string) => {
@@ -61,94 +62,150 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowNotifications(true)}
-                className="relative flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="relative flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Notificaciones"
               >
-                <Bell className="w-4 h-4" />
+                <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
-                <span className="hidden sm:inline">Notificaciones</span>
               </button>
+
               <button
                 onClick={() => setShowSearch(true)}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Buscar en contenido de documentos"
               >
-                <Search className="w-4 h-4" />
-                <span className="hidden sm:inline">Buscar contenido</span>
+                <Search className="w-5 h-5" />
               </button>
+
               {(profile?.role === 'admin' || profile?.role === 'rc_abogados') && (
                 <>
                   <button
-                    onClick={() => setShowOCRReprocessor(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Reprocesar documentos con OCR"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span className="hidden sm:inline">OCR</span>
-                  </button>
-                  <button
-                    onClick={() => setViewState({ type: 'users' })}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Administrar usuarios"
-                  >
-                    <Users className="w-4 h-4" />
-                    <span className="hidden sm:inline">Usuarios</span>
-                  </button>
-                  <button
-                    onClick={() => setViewState({ type: 'audit' })}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Registro de auditoría"
-                  >
-                    <Shield className="w-4 h-4" />
-                    <span className="hidden sm:inline">Auditoría</span>
-                  </button>
-                  <button
                     onClick={() => setViewState({ type: 'tags' })}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                     title="Gestión de etiquetas"
                   >
-                    <Tag className="w-4 h-4" />
-                    <span className="hidden sm:inline">Etiquetas</span>
+                    <Tag className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setViewState({ type: 'recycle' })}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                     title="Papelera de reciclaje"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Papelera</span>
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </>
               )}
-              <div className="flex items-center gap-2 text-sm">
-                <User className="w-4 h-4 text-gray-500" />
-                <span className="text-gray-700">{profile?.full_name || user?.email}</span>
-                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                  {getRoleName(profile?.role || 'user')}
-                </span>
+
+              <div className="h-8 w-px bg-gray-300"></div>
+
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left hidden sm:block">
+                      <div className="text-sm font-medium text-gray-900">
+                        {profile?.full_name || user?.email}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {getRoleName(profile?.role || 'user')}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showUserMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowUserMenu(false)}
+                    ></div>
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                      <div className="px-4 py-3 border-b border-gray-200">
+                        <p className="text-sm font-medium text-gray-900">
+                          {profile?.full_name || user?.email}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {user?.email}
+                        </p>
+                      </div>
+
+                      {(profile?.role === 'admin' || profile?.role === 'rc_abogados') && (
+                        <>
+                          <div className="py-1">
+                            <button
+                              onClick={() => {
+                                setShow2FA(true);
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                            >
+                              <Lock className="w-4 h-4" />
+                              Autenticación 2FA
+                            </button>
+                            <button
+                              onClick={() => {
+                                setViewState({ type: 'users' });
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                            >
+                              <Users className="w-4 h-4" />
+                              Gestión de Usuarios
+                            </button>
+                            <button
+                              onClick={() => {
+                                setViewState({ type: 'audit' });
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                            >
+                              <Shield className="w-4 h-4" />
+                              Registro de Auditoría
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowOCRReprocessor(true);
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Reprocesar OCR
+                            </button>
+                          </div>
+                          <div className="border-t border-gray-200"></div>
+                        </>
+                      )}
+
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            signOut();
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Cerrar Sesión
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-              <button
-                onClick={() => setShow2FA(true)}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Configurar 2FA"
-              >
-                <Shield className="w-4 h-4" />
-                <span className="hidden sm:inline">2FA</span>
-              </button>
-              <button
-                onClick={() => signOut()}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Salir
-              </button>
             </div>
           </div>
         </div>
