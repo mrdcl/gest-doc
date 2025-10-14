@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import posthog from 'posthog-js';
 import { supabase } from '../lib/supabase';
 import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2, Eye, Tag as TagIcon, X } from 'lucide-react';
 import JSZip from 'jszip';
@@ -80,6 +81,12 @@ export default function DocumentManager({ entityId, onBack, userRole }: Document
       if (entityRes.data) {
         setEntityName(entityRes.data.name);
         setEntityTypeId(entityRes.data.entity_type_id);
+      // Instrumentación: función para bloquear compartir y enviar evento
+      function handleShareBlocked(reason: string) {
+        if (localStorage.getItem('telemetry_consent') === 'true') {
+          posthog.capture('share_preflight_blocked', { reason });
+        }
+      }
       }
 
       if (movementsRes.data) {

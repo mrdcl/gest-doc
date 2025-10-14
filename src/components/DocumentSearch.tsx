@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, FileText, X, AlertCircle } from 'lucide-react';
+import posthog from 'posthog-js';
 
 type SearchResult = {
   id: string;
@@ -33,6 +34,9 @@ export default function DocumentSearch({ onClose, onDocumentSelect }: DocumentSe
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
+    if (localStorage.getItem('telemetry_consent') === 'true') {
+      posthog.capture('search_query', { query: searchQuery });
+    }
     setSearching(true);
     setSearched(true);
 
@@ -68,6 +72,9 @@ export default function DocumentSearch({ onClose, onDocumentSelect }: DocumentSe
       if (error) throw error;
 
       setResults(data || []);
+      if (localStorage.getItem('telemetry_consent') === 'true') {
+        posthog.capture('search_run', { query: searchQuery, resultCount: (data || []).length });
+      }
     } catch (error) {
       console.error('Error searching documents:', error);
       alert('Error al buscar en los documentos');

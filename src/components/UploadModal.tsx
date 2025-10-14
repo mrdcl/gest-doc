@@ -28,6 +28,8 @@ export default function UploadModal({ categories, onClose, onSuccess }: UploadMo
       }
     }
   };
+import { useState } from 'react';
+import posthog from 'posthog-js';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +37,9 @@ export default function UploadModal({ categories, onClose, onSuccess }: UploadMo
 
     setUploading(true);
     setError('');
+    if (localStorage.getItem('telemetry_consent') === 'true') {
+      posthog.capture('doc_upload_start', { fileName: file?.name, user: user?.email });
+    }
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -69,9 +74,15 @@ export default function UploadModal({ categories, onClose, onSuccess }: UploadMo
         details: { file_name: file.name, file_size: file.size }
       });
 
+      if (localStorage.getItem('telemetry_consent') === 'true') {
+        posthog.capture('doc_upload_success', { fileName: file?.name, user: user?.email });
+      }
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Error al subir el documento');
+      if (localStorage.getItem('telemetry_consent') === 'true') {
+        posthog.capture('doc_upload_fail', { fileName: file?.name, user: user?.email, error: err.message });
+      }
     } finally {
       setUploading(false);
     }

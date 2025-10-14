@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { FileText, LogIn } from 'lucide-react';
+import posthog from 'posthog-js';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -19,6 +20,9 @@ export default function Auth() {
     try {
       if (isLogin) {
         await signIn(email, password);
+        if (localStorage.getItem('telemetry_consent') === 'true') {
+          posthog.capture('auth_login_success', { email });
+        }
       } else {
         if (!fullName.trim()) {
           throw new Error('El nombre completo es requerido');

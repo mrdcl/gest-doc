@@ -1,6 +1,13 @@
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
+import posthog from 'posthog-js';
+import { useEffect } from 'react';
+
+// Simulación de consentimiento: reemplazar por lógica real si existe
+function getTelemetryConsent() {
+  return localStorage.getItem('telemetry_consent') === 'true';
+}
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -20,6 +27,14 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    if (getTelemetryConsent()) {
+      posthog.init('TU_POSTHOG_API_KEY', {
+        api_host: 'https://app.posthog.com',
+        autocapture: false,
+      });
+    }
+  }, []);
   return (
     <AuthProvider>
       <AppContent />

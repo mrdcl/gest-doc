@@ -17,6 +17,7 @@
     "otpauth": "^9.4.1",
     "pdf-parse": "^2.3.0",
     "pdfjs-dist": "^5.4.296",
+    "posthog-js": "^1.275.2",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

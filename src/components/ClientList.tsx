@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../lib/supabase';
+import posthog from 'posthog-js';
 import { Plus, Search, Building2, AlertCircle, Edit2 } from 'lucide-react';
 
 type Client = Database['public']['Tables']['clients']['Row'];
@@ -64,6 +65,9 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
       setShowCreateModal(false);
       setNewClient({ name: '', rut: '', email: '', phone: '', contact_person: '' });
       fetchClients();
+      if (localStorage.getItem('telemetry_consent') === 'true') {
+        posthog.capture('category_create_success', { name: newClient.name });
+      }
     } catch (error) {
       console.error('Error creating client:', error);
       alert('Error al crear el cliente');
