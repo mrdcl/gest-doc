@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, LogOut, User, Search, RefreshCw, Users, Shield } from 'lucide-react';
+import { FileText, LogOut, User, Search, RefreshCw, Users, Shield, Bell } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ClientList from './ClientList';
 import EntityList from './EntityList';
@@ -10,6 +10,8 @@ import OCRReprocessor from './OCRReprocessor';
 import UserManagement from './UserManagement';
 import AuditLog from './AuditLog';
 import TwoFactorAuth from './TwoFactorAuth';
+import NotificationCenter from './NotificationCenter';
+import { useNotifications } from '../hooks/useNotifications';
 
 type ViewState =
   | { type: 'clients' }
@@ -24,6 +26,8 @@ export default function Dashboard() {
   const [showSearch, setShowSearch] = useState(false);
   const [showOCRReprocessor, setShowOCRReprocessor] = useState(false);
   const [show2FA, setShow2FA] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const { unreadCount } = useNotifications();
 
   const getRoleName = (role: string) => {
     switch (role) {
@@ -54,6 +58,19 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowNotifications(true)}
+                className="relative flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Notificaciones"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+                <span className="hidden sm:inline">Notificaciones</span>
+              </button>
               <button
                 onClick={() => setShowSearch(true)}
                 className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -171,6 +188,10 @@ export default function Dashboard() {
 
       {show2FA && (
         <TwoFactorAuth onClose={() => setShow2FA(false)} />
+      )}
+
+      {showNotifications && (
+        <NotificationCenter onClose={() => setShowNotifications(false)} />
       )}
     </div>
   );

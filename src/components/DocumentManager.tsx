@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2 } from 'lucide-react';
+import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2, Eye } from 'lucide-react';
 import JSZip from 'jszip';
 import { processDocumentOCR } from '../lib/ocrService';
+import DocumentViewer from './DocumentViewer';
 
 type Movement = {
   id: string;
@@ -376,6 +377,7 @@ function MovementCard({
   const [uploadedDocs, setUploadedDocs] = useState<EntityDocument[]>([]);
   const [completionPercentage, setCompletionPercentage] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<EntityDocument | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRequiredDoc, setSelectedRequiredDoc] = useState<string | null>(null);
   const [editingDoc, setEditingDoc] = useState<EntityDocument | null>(null);
@@ -702,6 +704,13 @@ function MovementCard({
                           <Edit2 size={18} />
                         </button>
                         <button
+                          onClick={() => setViewingDocument(doc)}
+                          className="text-green-600 hover:text-green-700 p-1"
+                          title="Ver documento"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button
                           onClick={() => handleDownload(doc)}
                           className="text-blue-600 hover:text-blue-700 p-1"
                           title="Descargar"
@@ -775,6 +784,13 @@ function MovementCard({
                             title="Editar información"
                           >
                             <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => setViewingDocument(uploadedDoc)}
+                            className="text-green-600 hover:text-green-700 p-1"
+                            title="Ver documento"
+                          >
+                            <Eye size={18} />
                           </button>
                           <button
                             onClick={() => handleDownload(uploadedDoc)}
@@ -974,6 +990,15 @@ function MovementCard({
             </form>
           </div>
         </div>
+      )}
+
+      {viewingDocument && (
+        <DocumentViewer
+          documentId={viewingDocument.id}
+          fileName={viewingDocument.file_name}
+          filePath={viewingDocument.file_path}
+          onClose={() => setViewingDocument(null)}
+        />
       )}
     </div>
   );
