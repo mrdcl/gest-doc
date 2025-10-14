@@ -227,8 +227,8 @@ El sistema incluye las siguientes categorías iniciales:
 
 ## 📄 Licencia
 
-Sistema desarrollado para uso corporativo interno.
+Sistema desarrollado para uso interno. Prohibido su uso sin autorización expresa.
 
 ## 👥 Soporte
 
-Para soporte técnico o consultas, contactar al equipo de desarrollo.
+Sistema desarrollado para uso interno. Se entrega "as is", sin soporte.
