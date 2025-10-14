@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Shield, Download, Filter, Search, X, Calendar, User, FileText } from 'lucide-react';
+import { Shield, Download, Filter, Search, X, Calendar, User, FileText, Clock, Zap } from 'lucide-react';
+import Papa from 'papaparse';
 
 type AuditLogEntry = {
   id: string;
@@ -30,6 +31,9 @@ export default function AuditLog({ onBack }: AuditLogProps) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
+  const [filterUser, setFilterUser] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportLimit, setExportLimit] = useState(10000);
 
   useEffect(() => {
     fetchLogs();
@@ -74,29 +78,93 @@ export default function AuditLog({ onBack }: AuditLogProps) {
     }
   };
 
-  const exportToCSV = () => {
-    const headers = ['Fecha', 'Usuario', 'Email', 'Rol', 'Acción', 'Tipo', 'Entidad', 'Detalles'];
-    const csvData = logs.map(log => [
-      new Date(log.created_at).toLocaleString('es-CL'),
-      log.user_name || 'N/A',
-      log.user_email,
-      getRoleName(log.user_role),
-      getActionName(log.action),
-      getEntityTypeName(log.entity_type),
-      log.entity_name || 'N/A',
-      JSON.stringify(log.metadata || {})
-    ]);
+  const exportToCSV = async () => {
+    setExporting(true);
+    const exportStartTime = Date.now();
 
-    const csvContent = [
-      headers.join(','),
-      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
+    try {
+      // Fetch all matching logs for export (up to limit)
+      let query = supabase
+        .from('audit_logs_detailed')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(exportLimit);
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `audit_log_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+      if (filterAction) query = query.eq('action', filterAction);
+      if (filterEntityType) query = query.eq('entity_type', filterEntityType);
+      if (filterUser) query = query.ilike('user_email', `%${filterUser}%`);
+      if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', endDateTime.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Prepare data for CSV using PapaParse
+      const csvData = (data || []).map(log => ({
+        'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CL'),
+        'Usuario': log.user_name || 'N/A',
+        'Email': log.user_email || 'N/A',
+        'Rol': getRoleName(log.user_role),
+        'Acción': getActionName(log.action),
+        'Tipo': log.entity_type ? getEntityTypeName(log.entity_type) : 'N/A',
+        'ID Entidad': log.entity_id || 'N/A',
+        'Nombre Entidad': log.entity_name || 'N/A',
+        'Metadatos': log.metadata ? JSON.stringify(log.metadata) : '',
+        'Valor Anterior': log.old_value ? JSON.stringify(log.old_value) : '',
+        'Valor Nuevo': log.new_value ? JSON.stringify(log.new_value) : ''
+      }));
+
+      // Use PapaParse for efficient CSV generation
+      const csv = Papa.unparse(csvData);
+
+      // Create and download file
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+
+      const filename = `audit_log_${new Date().toISOString().split('T')[0]}_${csvData.length}records.csv`;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+
+      const exportDuration = Date.now() - exportStartTime;
+      console.log(`Exported ${csvData.length} records in ${exportDuration}ms`);
+
+      alert(`✅ Exportados ${csvData.length} registros en ${(exportDuration / 1000).toFixed(2)}s`);
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      alert('Error al exportar CSV. Por favor, intenta nuevamente.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Quick filter shortcuts
+  const applyQuickFilter = (type: 'downloads_week' | 'recent_logins' | 'document_edits') => {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    setStartDate(sevenDaysAgo.toISOString().split('T')[0]);
+    setEndDate(now.toISOString().split('T')[0]);
+
+    switch (type) {
+      case 'downloads_week':
+        setFilterAction('download');
+        setFilterEntityType('document');
+        break;
+      case 'recent_logins':
+        setFilterAction('LOGIN');
+        setFilterEntityType('');
+        break;
+      case 'document_edits':
+        setFilterAction('UPDATE');
+        setFilterEntityType('document');
+        break;
+    }
   };
 
   const getActionName = (action: string) => {
@@ -195,15 +263,53 @@ export default function AuditLog({ onBack }: AuditLogProps) {
         </div>
         <button
           onClick={exportToCSV}
-          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          disabled={exporting}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Download size={20} />
-          Exportar CSV
+          {exporting ? (
+            <>
+              <Clock size={20} className="animate-spin" />
+              Exportando...
+            </>
+          ) : (
+            <>
+              <Download size={20} />
+              Exportar CSV
+            </>
+          )}
         </button>
       </div>
 
+      {/* Quick Filters */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg shadow mb-4 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap size={18} className="text-blue-600" />
+          <h3 className="font-semibold text-gray-900">Atajos Rápidos</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => applyQuickFilter('downloads_week')}
+            className="px-3 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm"
+          >
+            📥 Descargas últimos 7 días
+          </button>
+          <button
+            onClick={() => applyQuickFilter('recent_logins')}
+            className="px-3 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm"
+          >
+            🔐 Inicios de sesión recientes
+          </button>
+          <button
+            onClick={() => applyQuickFilter('document_edits')}
+            className="px-3 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm"
+          >
+            ✏️ Ediciones de documentos (7 días)
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg shadow mb-6 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Search size={16} className="inline mr-1" />
@@ -233,6 +339,20 @@ export default function AuditLog({ onBack }: AuditLogProps) {
                 <option key={action} value={action}>{getActionName(action)}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <User size={16} className="inline mr-1" />
+              Usuario
+            </label>
+            <input
+              type="text"
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value)}
+              placeholder="Email del usuario..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           <div>
@@ -279,7 +399,7 @@ export default function AuditLog({ onBack }: AuditLogProps) {
           </div>
         </div>
 
-        {(searchTerm || filterAction || filterEntityType || startDate || endDate) && (
+        {(searchTerm || filterAction || filterEntityType || filterUser || startDate || endDate) && (
           <div className="mt-3 flex items-center gap-2">
             <span className="text-sm text-gray-600">Filtros activos:</span>
             <button
@@ -287,6 +407,7 @@ export default function AuditLog({ onBack }: AuditLogProps) {
                 setSearchTerm('');
                 setFilterAction('');
                 setFilterEntityType('');
+                setFilterUser('');
                 setStartDate('');
                 setEndDate('');
               }}
