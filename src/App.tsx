@@ -1,16 +1,21 @@
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
-import posthog from 'posthog-js';
+import TelemetryConsent from './components/TelemetryConsent';
 import { useEffect } from 'react';
-
-// Simulación de consentimiento: reemplazar por lógica real si existe
-function getTelemetryConsent() {
-  return localStorage.getItem('telemetry_consent') === 'true';
-}
+import { initializeTelemetry, trackPageView } from './lib/telemetry';
 
 function AppContent() {
   const { user, loading } = useAuth();
+
+  // Track page views when user navigates
+  useEffect(() => {
+    if (user) {
+      trackPageView('Dashboard');
+    } else if (!loading) {
+      trackPageView('Login');
+    }
+  }, [user, loading]);
 
   if (loading) {
     return (
@@ -28,16 +33,14 @@ function AppContent() {
 
 function App() {
   useEffect(() => {
-    if (getTelemetryConsent()) {
-      posthog.init('TU_POSTHOG_API_KEY', {
-        api_host: 'https://app.posthog.com',
-        autocapture: false,
-      });
-    }
+    // Initialize telemetry on app load (respects user consent)
+    initializeTelemetry();
   }, []);
+
   return (
     <AuthProvider>
       <AppContent />
+      <TelemetryConsent />
     </AuthProvider>
   );
 }

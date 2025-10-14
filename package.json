@@ -8,13 +8,17 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "db:push": "supabase db push",
+    "db:seed": "supabase db seed"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "@types/papaparse": "^5.3.16",
     "jszip": "^3.10.1",
     "lucide-react": "^0.344.0",
     "otpauth": "^9.4.1",
+    "papaparse": "^5.5.3",
     "pdf-parse": "^2.3.0",
     "pdfjs-dist": "^5.4.296",
     "posthog-js": "^1.275.2",
