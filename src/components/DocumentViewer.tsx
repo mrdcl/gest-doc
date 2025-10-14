@@ -28,7 +28,20 @@ export default function DocumentViewer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState('');
 
-  const isPDF = fileName.toLowerCase().endsWith('.pdf');
+  const getFileType = () => {
+    const ext = fileName.toLowerCase().split('.').pop() || '';
+    if (ext === 'pdf') return 'pdf';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return 'image';
+    if (['doc', 'docx'].includes(ext)) return 'word';
+    if (['xls', 'xlsx'].includes(ext)) return 'excel';
+    if (['ppt', 'pptx'].includes(ext)) return 'powerpoint';
+    if (['txt', 'csv', 'json', 'xml', 'html', 'css', 'js', 'ts'].includes(ext)) return 'text';
+    return 'other';
+  };
+
+  const fileType = getFileType();
+  const isPDF = fileType === 'pdf';
+  const isOfficeDoc = ['word', 'excel', 'powerpoint'].includes(fileType);
 
   const loadDocument = async () => {
     setLoading(true);
@@ -182,6 +195,32 @@ export default function DocumentViewer({
         </div>
 
         <div className="flex items-center gap-2">
+          {(isPDF || fileType === 'image') && (
+            <>
+              <button
+                onClick={() => changeScale(-0.25)}
+                disabled={scale <= 0.5}
+                className="p-2 hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Alejar"
+              >
+                <ZoomOut size={20} />
+              </button>
+
+              <span className="text-sm px-2">{Math.round(scale * 100)}%</span>
+
+              <button
+                onClick={() => changeScale(0.25)}
+                disabled={scale >= 3.0}
+                className="p-2 hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Acercar"
+              >
+                <ZoomIn size={20} />
+              </button>
+
+              <div className="w-px h-6 bg-gray-700 mx-2" />
+            </>
+          )}
+
           {isPDF && (
             <>
               <button
@@ -216,28 +255,6 @@ export default function DocumentViewer({
                 title="Página siguiente"
               >
                 <ChevronRight size={20} />
-              </button>
-
-              <div className="w-px h-6 bg-gray-700 mx-2" />
-
-              <button
-                onClick={() => changeScale(-0.25)}
-                disabled={scale <= 0.5}
-                className="p-2 hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Alejar"
-              >
-                <ZoomOut size={20} />
-              </button>
-
-              <span className="text-sm px-2">{Math.round(scale * 100)}%</span>
-
-              <button
-                onClick={() => changeScale(0.25)}
-                disabled={scale >= 3.0}
-                className="p-2 hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Acercar"
-              >
-                <ZoomIn size={20} />
               </button>
 
               <div className="w-px h-6 bg-gray-700 mx-2" />
@@ -295,29 +312,53 @@ export default function DocumentViewer({
               />
             </Document>
           </div>
+        ) : fileType === 'image' ? (
+          <div className="bg-white shadow-2xl p-4 max-w-full max-h-full overflow-auto">
+            <img
+              src={fileUrl}
+              alt={fileName}
+              className="max-w-full h-auto"
+              style={{ transform: `scale(${scale})`, transformOrigin: 'center top' }}
+            />
+          </div>
+        ) : isOfficeDoc ? (
+          <div className="w-full h-full bg-white">
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`}
+              className="w-full h-full border-0"
+              title={fileName}
+            />
+          </div>
+        ) : fileType === 'text' ? (
+          <div className="w-full max-w-4xl bg-white rounded-lg shadow-2xl overflow-hidden">
+            <iframe
+              src={fileUrl}
+              className="w-full h-full min-h-[600px] border-0"
+              title={fileName}
+            />
+          </div>
         ) : (
           <div className="max-w-4xl w-full bg-white rounded-lg shadow-2xl overflow-hidden">
-            {fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-              <img
-                src={fileUrl}
-                alt={fileName}
-                className="w-full h-auto"
-                style={{ transform: `scale(${scale})`, transformOrigin: 'center' }}
-              />
-            ) : (
-              <div className="p-12 text-center">
-                <p className="text-gray-600 mb-4">
-                  Vista previa no disponible para este tipo de archivo
+            <div className="p-12 text-center">
+              <div className="mb-6">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
+                  <Download size={40} className="text-gray-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">{fileName}</h3>
+                <p className="text-gray-600 mb-6">
+                  Vista previa no disponible para este tipo de archivo.
+                  <br />
+                  Descarga el archivo para verlo en tu aplicación local.
                 </p>
-                <button
-                  onClick={downloadDocument}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 inline-flex items-center gap-2"
-                >
-                  <Download size={20} />
-                  Descargar archivo
-                </button>
               </div>
-            )}
+              <button
+                onClick={downloadDocument}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 inline-flex items-center gap-2 transition-colors"
+              >
+                <Download size={20} />
+                Descargar archivo
+              </button>
+            </div>
           </div>
         )}
       </div>
