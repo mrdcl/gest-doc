@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize, Minimize } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -29,10 +29,6 @@ export default function DocumentViewer({
   const [error, setError] = useState('');
 
   const isPDF = fileName.toLowerCase().endsWith('.pdf');
-
-  useState(() => {
-    loadDocument();
-  });
 
   const loadDocument = async () => {
     setLoading(true);
@@ -85,6 +81,10 @@ export default function DocumentViewer({
       console.error('Error logging document view:', error);
     }
   };
+
+  useEffect(() => {
+    loadDocument();
+  }, []);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
