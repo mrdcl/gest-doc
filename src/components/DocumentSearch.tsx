@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, FileText, X, AlertCircle } from 'lucide-react';
-import posthog from 'posthog-js';
+import { trackSearchQuery, trackSearchRun, trackSearchResultClick } from '../lib/telemetry';
 
 type SearchResult = {
   id: string;
@@ -34,9 +34,9 @@ export default function DocumentSearch({ onClose, onDocumentSelect }: DocumentSe
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    if (localStorage.getItem('telemetry_consent') === 'true') {
-      posthog.capture('search_query', { query: searchQuery });
-    }
+    trackSearchQuery(searchQuery);
+    const searchStartTime = Date.now();
+
     setSearching(true);
     setSearched(true);
 
@@ -71,10 +71,9 @@ export default function DocumentSearch({ onClose, onDocumentSelect }: DocumentSe
 
       if (error) throw error;
 
+      const searchDuration = Date.now() - searchStartTime;
       setResults(data || []);
-      if (localStorage.getItem('telemetry_consent') === 'true') {
-        posthog.capture('search_run', { query: searchQuery, resultCount: (data || []).length });
-      }
+      trackSearchRun(searchQuery, (data || []).length, searchDuration);
     } catch (error) {
       console.error('Error searching documents:', error);
       alert('Error al buscar en los documentos');
@@ -191,11 +190,12 @@ export default function DocumentSearch({ onClose, onDocumentSelect }: DocumentSe
                 Se encontraron {results.length} resultado{results.length !== 1 ? 's' : ''}
               </p>
 
-              {results.map((result) => (
+              {results.map((result, index) => (
                 <div
                   key={result.id}
                   className="border border-gray-200 rounded-lg p-4 hover:bg-blue-50 hover:border-blue-300 transition-all cursor-pointer"
                   onClick={() => {
+                    trackSearchResultClick(searchQuery, result.document_id, index);
                     if (result.client_id && result.entity_id) {
                       onDocumentSelect(result.client_id, result.entity_id);
                       onClose();

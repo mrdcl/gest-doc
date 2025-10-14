@@ -159,13 +159,91 @@ BEGIN
   END IF;
 END $$;
 
--- Note: Document creation requires actual file upload to Supabase Storage
--- This should be handled through the application UI or a separate script
--- For now, we log a notice about it
+-- Create demo document metadata (without actual file in storage)
+-- Note: In production, files must be uploaded to Supabase Storage first
+-- This creates a metadata-only entry for demonstration purposes
 DO $$
+DECLARE
+  demo_entity_id uuid;
+  demo_category_id uuid;
+  demo_user_id uuid;
+  demo_doc_id uuid;
 BEGIN
-  RAISE NOTICE 'Demo document should be created through the application UI';
-  RAISE NOTICE 'Use the upload feature to add an example document to "Sociedad Demo S.L."';
+  -- Get demo user id
+  SELECT id INTO demo_user_id
+  FROM auth.users
+  WHERE email = 'admin@example.com';
+
+  -- Get demo entity id
+  SELECT id INTO demo_entity_id
+  FROM entities
+  WHERE name = 'Sociedad Demo S.L.';
+
+  -- Get demo category id
+  SELECT id INTO demo_category_id
+  FROM categories
+  WHERE name = 'Documentos de Demostración';
+
+  -- Check if demo document exists
+  SELECT id INTO demo_doc_id
+  FROM documents
+  WHERE file_name = 'documento_ejemplo.pdf'
+  AND entity_id = demo_entity_id;
+
+  -- Create document if it doesn't exist
+  IF demo_doc_id IS NULL AND demo_entity_id IS NOT NULL AND demo_category_id IS NOT NULL THEN
+    INSERT INTO documents (
+      id,
+      entity_id,
+      category_id,
+      file_name,
+      file_path,
+      file_size,
+      mime_type,
+      title,
+      description,
+      status,
+      uploaded_by,
+      created_at,
+      updated_at,
+      content_text
+    ) VALUES (
+      gen_random_uuid(),
+      demo_entity_id,
+      demo_category_id,
+      'documento_ejemplo.pdf',
+      'demo/documento_ejemplo.pdf',
+      1024,
+      'application/pdf',
+      'Documento de Ejemplo',
+      'Este es un documento de demostración del sistema de gestión documental. Muestra cómo se estructuran y organizan los documentos en el sistema.',
+      'active',
+      demo_user_id,
+      now(),
+      now(),
+      'DOCUMENTO DE EJEMPLO
+
+Este es un documento de demostración creado automáticamente por el sistema de seeds.
+
+Propósito:
+- Demostrar la estructura de documentos
+- Facilitar testing y desarrollo
+- Mostrar funcionalidades del sistema
+
+Características:
+- Asociado a la entidad "Sociedad Demo S.L."
+- Categoría: Documentos de Demostración
+- Estado: Activo
+- Creado por: Demo Admin
+
+Para uso en desarrollo y pruebas.'
+    );
+
+    RAISE NOTICE 'Demo document created: documento_ejemplo.pdf';
+    RAISE NOTICE 'Note: This is metadata only. For full functionality, upload an actual file.';
+  ELSE
+    RAISE NOTICE 'Demo document already exists or dependencies missing';
+  END IF;
 END $$;
 
 -- Summary
@@ -182,7 +260,8 @@ BEGIN
   RAISE NOTICE '  - 1 Admin user';
   RAISE NOTICE '  - 1 Demo category: "Documentos de Demostración"';
   RAISE NOTICE '  - 1 Demo entity: "Sociedad Demo S.L."';
+  RAISE NOTICE '  - 1 Demo document: "documento_ejemplo.pdf"';
   RAISE NOTICE '';
-  RAISE NOTICE 'Next step: Upload an example document through the UI';
+  RAISE NOTICE 'System is ready for testing and development!';
   RAISE NOTICE '=================================================';
 END $$;

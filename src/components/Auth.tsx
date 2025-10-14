@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { FileText, LogIn } from 'lucide-react';
-import posthog from 'posthog-js';
+import { trackAuthLoginSuccess, trackAuthLoginFail } from '../lib/telemetry';
+import { supabase } from '../lib/supabase';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,8 +21,11 @@ export default function Auth() {
     try {
       if (isLogin) {
         await signIn(email, password);
-        if (localStorage.getItem('telemetry_consent') === 'true') {
-          posthog.capture('auth_login_success', { email });
+
+        // Get user ID for telemetry
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          trackAuthLoginSuccess(user.id, email);
         }
       } else {
         if (!fullName.trim()) {
@@ -30,7 +34,13 @@ export default function Auth() {
         await signUp(email, password, fullName);
       }
     } catch (err: any) {
-      setError(err.message || 'Ocurrió un error');
+      const errorMessage = err.message || 'Ocurrió un error';
+      setError(errorMessage);
+
+      // Track login failure
+      if (isLogin) {
+        trackAuthLoginFail(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

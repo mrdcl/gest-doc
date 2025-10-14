@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { X, Upload, FileText } from 'lucide-react';
+import { trackDocUploadStart, trackDocUploadSuccess, trackDocUploadFail } from '../lib/telemetry';
 
 interface UploadModalProps {
   categories: Array<{ id: string; name: string }>;
@@ -28,8 +29,6 @@ export default function UploadModal({ categories, onClose, onSuccess }: UploadMo
       }
     }
   };
-import { useState } from 'react';
-import posthog from 'posthog-js';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,9 +36,9 @@ import posthog from 'posthog-js';
 
     setUploading(true);
     setError('');
-    if (localStorage.getItem('telemetry_consent') === 'true') {
-      posthog.capture('doc_upload_start', { fileName: file?.name, user: user?.email });
-    }
+
+    const uploadStartTime = Date.now();
+    trackDocUploadStart(file.name, file.size);
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -52,7 +51,7 @@ import posthog from 'posthog-js';
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase
+      const { data: documentData, error: dbError } = await supabase
         .from('documents')
         .insert({
           title,
@@ -64,7 +63,9 @@ import posthog from 'posthog-js';
           category_id: categoryId || null,
           status,
           owner_id: user.id
-        });
+        })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
@@ -74,15 +75,14 @@ import posthog from 'posthog-js';
         details: { file_name: file.name, file_size: file.size }
       });
 
-      if (localStorage.getItem('telemetry_consent') === 'true') {
-        posthog.capture('doc_upload_success', { fileName: file?.name, user: user?.email });
-      }
+      const uploadDuration = Date.now() - uploadStartTime;
+      trackDocUploadSuccess(documentData.id, file.name, file.size, uploadDuration);
+
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Error al subir el documento');
-      if (localStorage.getItem('telemetry_consent') === 'true') {
-        posthog.capture('doc_upload_fail', { fileName: file?.name, user: user?.email, error: err.message });
-      }
+      const errorMessage = err.message || 'Error al subir el documento';
+      setError(errorMessage);
+      trackDocUploadFail(file.name, errorMessage);
     } finally {
       setUploading(false);
     }
