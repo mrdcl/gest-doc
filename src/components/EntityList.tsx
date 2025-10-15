@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../lib/supabase';
-import { Plus, Search, Building, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Building, AlertCircle, ArrowLeft, Edit2, FolderOpen } from 'lucide-react';
+import EntityEditor from './EntityEditor';
+import MovementManager from './MovementManager';
 
 type Entity = Database['public']['Tables']['entities']['Row'] & {
   entity_types?: { name: string };
@@ -29,6 +31,8 @@ export default function EntityList({ clientId, onSelectEntity, onBack, userRole 
     legal_representative: '',
     address: '',
   });
+  const [editingEntity, setEditingEntity] = useState<string | null>(null);
+  const [managingMovements, setManagingMovements] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -156,8 +160,7 @@ export default function EntityList({ clientId, onSelectEntity, onBack, userRole 
           {filteredEntities.map((entity) => (
             <div
               key={entity.id}
-              onClick={() => onSelectEntity(entity.id)}
-              className="border border-gray-200 rounded-lg p-6 hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer group"
+              className="border border-gray-200 rounded-lg p-6 hover:border-blue-500 hover:shadow-lg transition-all group"
             >
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors">
@@ -180,9 +183,65 @@ export default function EntityList({ clientId, onSelectEntity, onBack, userRole 
                   )}
                 </div>
               </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectEntity(entity.id);
+                  }}
+                  className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Ver Documentos
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setManagingMovements({ id: entity.id, name: entity.name });
+                  }}
+                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Gestionar gestiones"
+                >
+                  <FolderOpen size={18} />
+                </button>
+                {(userRole === 'admin' || userRole === 'rc_abogados') && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingEntity(entity.id);
+                    }}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    title="Editar sociedad"
+                  >
+                    <Edit2 size={18} />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* Entity Editor Modal */}
+      {editingEntity && (
+        <EntityEditor
+          entityId={editingEntity}
+          onClose={() => setEditingEntity(null)}
+          onSuccess={() => {
+            setEditingEntity(null);
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* Movement Manager Modal */}
+      {managingMovements && (
+        <MovementManager
+          entityId={managingMovements.id}
+          entityName={managingMovements.name}
+          onClose={() => setManagingMovements(null)}
+        />
       )}
 
       {showCreateModal && (
