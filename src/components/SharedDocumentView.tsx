@@ -207,9 +207,9 @@ export default function SharedDocumentView({ token }: SharedDocumentViewProps) {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <DocumentViewer
             documentId={document.id}
-            fileUrl={fileUrl}
-            fileType={document.mime_type}
+            filePath={document.file_path}
             fileName={document.title}
+            onClose={() => {}}
           />
         </div>
       </div>

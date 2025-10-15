@@ -187,7 +187,7 @@ export default function DocumentWorkflow({
         .select('user_id, email');
 
       if (error) throw error;
-      setUsers(data || []);
+      setUsers((data || []).map(u => ({ id: u.user_id, email: u.email })));
     } catch (error) {
       console.error('Error fetching users:', error);
     }
