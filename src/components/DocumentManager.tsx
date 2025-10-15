@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import posthog from 'posthog-js';
 import { supabase } from '../lib/supabase';
-import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2, Eye, Tag as TagIcon, X } from 'lucide-react';
+import { Search, FileText, AlertCircle, ArrowLeft, Plus, Upload, Download, Trash2, Archive, CheckCircle2, Edit2, Eye, Tag as TagIcon, X, Link2, GitBranch } from 'lucide-react';
 import JSZip from 'jszip';
 import { processDocumentOCR } from '../lib/ocrService';
 import DocumentViewer from './DocumentViewer';
+import ShareableLinkModal from './ShareableLinkModal';
+import DocumentWorkflow from './DocumentWorkflow';
 
 type Movement = {
   id: string;
@@ -401,6 +403,8 @@ function MovementCard({
     description: '',
     file_date: '',
   });
+  const [sharingDoc, setSharingDoc] = useState<EntityDocument | null>(null);
+  const [workflowDoc, setWorkflowDoc] = useState<EntityDocument | null>(null);
 
   const isFuncionamiento = movement.movement_types?.code === 'FUNCIONAMIENTO';
 
@@ -724,6 +728,20 @@ function MovementCard({
                         >
                           <Download size={18} />
                         </button>
+                        <button
+                          onClick={() => setSharingDoc(doc)}
+                          className="text-purple-600 hover:text-purple-700 p-1"
+                          title="Compartir"
+                        >
+                          <Link2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => setWorkflowDoc(doc)}
+                          className="text-indigo-600 hover:text-indigo-700 p-1"
+                          title="Workflow"
+                        >
+                          <GitBranch size={18} />
+                        </button>
                         {(userRole === 'admin' || userRole === 'rc_abogados') && (
                           <button
                             onClick={() => handleDelete(doc)}
@@ -805,6 +823,20 @@ function MovementCard({
                             title="Descargar"
                           >
                             <Download size={18} />
+                          </button>
+                          <button
+                            onClick={() => setSharingDoc(uploadedDoc)}
+                            className="text-purple-600 hover:text-purple-700 p-1"
+                            title="Compartir"
+                          >
+                            <Link2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => setWorkflowDoc(uploadedDoc)}
+                            className="text-indigo-600 hover:text-indigo-700 p-1"
+                            title="Workflow"
+                          >
+                            <GitBranch size={18} />
                           </button>
                           {(userRole === 'admin' || userRole === 'rc_abogados') && (
                             <button
@@ -1005,6 +1037,23 @@ function MovementCard({
           fileName={viewingDocument.file_name}
           filePath={viewingDocument.file_path}
           onClose={() => setViewingDocument(null)}
+        />
+      )}
+
+      {sharingDoc && (
+        <ShareableLinkModal
+          documentId={sharingDoc.id}
+          documentName={sharingDoc.title}
+          onClose={() => setSharingDoc(null)}
+        />
+      )}
+
+      {workflowDoc && (
+        <DocumentWorkflow
+          documentId={workflowDoc.id}
+          documentName={workflowDoc.title}
+          onClose={() => setWorkflowDoc(null)}
+          onStateChange={() => fetchMovementDetails()}
         />
       )}
     </div>

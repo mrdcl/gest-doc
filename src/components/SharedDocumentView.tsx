@@ -9,11 +9,11 @@ interface SharedDocumentViewProps {
 
 interface Document {
   id: string;
-  name: string;
-  file_type: string;
+  title: string;
+  mime_type: string;
   file_size: number;
-  storage_path: string;
-  uploaded_at: string;
+  file_path: string;
+  created_at: string;
 }
 
 export default function SharedDocumentView({ token }: SharedDocumentViewProps) {
@@ -62,7 +62,7 @@ export default function SharedDocumentView({ token }: SharedDocumentViewProps) {
 
       const { data: urlData } = await supabase.storage
         .from('documents')
-        .createSignedUrl(docData.storage_path, 3600);
+        .createSignedUrl(docData.file_path, 3600);
 
       if (urlData) {
         setFileUrl(urlData.signedUrl);
@@ -85,7 +85,7 @@ export default function SharedDocumentView({ token }: SharedDocumentViewProps) {
       const url = window.URL.createObjectURL(blob);
       const a = window.document.createElement('a');
       a.href = url;
-      a.download = document.name;
+      a.download = document.title;
       window.document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -172,11 +172,11 @@ export default function SharedDocumentView({ token }: SharedDocumentViewProps) {
                 <FileText className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{document.name}</h1>
+                <h1 className="text-xl font-bold text-gray-900">{document.title}</h1>
                 <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                   <span>{formatFileSize(document.file_size)}</span>
                   <span>•</span>
-                  <span>Subido: {formatDate(document.uploaded_at)}</span>
+                  <span>Subido: {formatDate(document.created_at)}</span>
                 </div>
               </div>
             </div>
@@ -208,8 +208,8 @@ export default function SharedDocumentView({ token }: SharedDocumentViewProps) {
           <DocumentViewer
             documentId={document.id}
             fileUrl={fileUrl}
-            fileType={document.file_type}
-            fileName={document.name}
+            fileType={document.mime_type}
+            fileName={document.title}
           />
         </div>
       </div>

@@ -257,7 +257,7 @@ BEGIN
   RETURN QUERY
   SELECT
     ws.document_id,
-    d.name as document_name,
+    d.title as document_name,
     ws.current_state,
     ws.updated_at as assigned_at,
     ws.due_date,
@@ -293,7 +293,7 @@ CREATE POLICY "Users can view workflow states for accessible documents"
       SELECT 1 FROM documents d
       WHERE d.id = document_id
       AND (
-        d.uploaded_by = auth.uid()
+        d.owner_id = auth.uid()
         OR EXISTS (
           SELECT 1 FROM document_access da
           WHERE da.document_id = d.id
@@ -312,7 +312,7 @@ CREATE POLICY "Users can create workflow states for own documents"
     EXISTS (
       SELECT 1 FROM documents d
       WHERE d.id = document_id
-      AND d.uploaded_by = auth.uid()
+      AND d.owner_id = auth.uid()
     )
   );
 
@@ -326,7 +326,7 @@ CREATE POLICY "Users can update workflow states"
     OR EXISTS (
       SELECT 1 FROM documents d
       WHERE d.id = document_id
-      AND d.uploaded_by = auth.uid()
+      AND d.owner_id = auth.uid()
     )
   )
   WITH CHECK (
@@ -334,7 +334,7 @@ CREATE POLICY "Users can update workflow states"
     OR EXISTS (
       SELECT 1 FROM documents d
       WHERE d.id = document_id
-      AND d.uploaded_by = auth.uid()
+      AND d.owner_id = auth.uid()
     )
   );
 
@@ -348,7 +348,7 @@ CREATE POLICY "Users can view workflow transitions for accessible documents"
       SELECT 1 FROM documents d
       WHERE d.id = document_id
       AND (
-        d.uploaded_by = auth.uid()
+        d.owner_id = auth.uid()
         OR EXISTS (
           SELECT 1 FROM document_access da
           WHERE da.document_id = d.id
@@ -384,7 +384,7 @@ CREATE OR REPLACE VIEW workflow_transition_history AS
 SELECT
   wt.id,
   wt.document_id,
-  d.name as document_name,
+  d.title as document_name,
   wt.from_state,
   wt.to_state,
   wt.transition_type,

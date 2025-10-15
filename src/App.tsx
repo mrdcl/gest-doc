@@ -2,7 +2,8 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import TelemetryConsent from './components/TelemetryConsent';
-import { useEffect } from 'react';
+import SharedDocumentView from './components/SharedDocumentView';
+import { useEffect, useState } from 'react';
 import { initializeTelemetry, trackPageView } from './lib/telemetry';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -19,15 +20,32 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const [shareToken, setShareToken] = useState<string | null>(null);
+
+  // Check if we're on a share route
+  useEffect(() => {
+    const path = window.location.pathname;
+    const shareMatch = path.match(/^\/share\/([^\/]+)$/);
+    if (shareMatch) {
+      setShareToken(shareMatch[1]);
+    }
+  }, []);
 
   // Track page views when user navigates
   useEffect(() => {
-    if (user) {
+    if (shareToken) {
+      trackPageView('SharedDocument');
+    } else if (user) {
       trackPageView('Dashboard');
     } else if (!loading) {
       trackPageView('Login');
     }
-  }, [user, loading]);
+  }, [user, loading, shareToken]);
+
+  // If we're on a share route, show the shared document view
+  if (shareToken) {
+    return <SharedDocumentView token={shareToken} />;
+  }
 
   if (loading) {
     return (
