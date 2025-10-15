@@ -39,7 +39,6 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('is_active', true)
         .order('name');
 
       if (error) throw error;
@@ -269,15 +268,10 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
         await supabase.from('document_recycle_bin').insert(recycleBinEntries);
       }
 
-      // Soft delete: mark as inactive
-      await supabase
-        .from('entities')
-        .update({ is_active: false })
-        .in('id', entityIds);
-
+      // Delete client (CASCADE will delete related entities and movements)
       await supabase
         .from('clients')
-        .update({ is_active: false })
+        .delete()
         .eq('id', deletingClient.id);
 
       // Log audit
