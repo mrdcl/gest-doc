@@ -49,36 +49,47 @@ export default function MovementManager({ entityId, entityName, onClose }: Movem
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch movements with OCR quality info
+      // Fetch movements
       const { data: movementsData, error: movementsError } = await supabase
         .from('entity_movements')
         .select(`
           *,
           movement_types(name),
-          movement_subcategories(name),
-          documents(id, content_text, has_low_quality_ocr)
+          movement_subcategories(name)
         `)
         .eq('entity_id', entityId)
         .order('document_date', { ascending: false });
 
       if (movementsError) throw movementsError;
 
-      // Check for low quality OCR in any related documents
-      const formattedMovements = (movementsData || []).map(m => ({
-        id: m.id,
-        entity_id: m.entity_id,
-        movement_type_id: m.movement_type_id,
-        subcategory_id: m.subcategory_id,
-        document_date: m.document_date,
-        description: m.description || '',
-        notes: m.notes || '',
-        created_at: m.created_at,
-        movement_type_name: m.movement_types?.name,
-        subcategory_name: m.movement_subcategories?.name,
-        has_low_quality_ocr: m.documents?.some((d: any) => d.has_low_quality_ocr) || false,
-      }));
+      // For each movement, check if any documents have low quality OCR
+      const movementsWithOCRStatus = await Promise.all(
+        (movementsData || []).map(async (m) => {
+          // Check for documents with low quality OCR in this movement
+          const { data: docs } = await supabase
+            .from('documents')
+            .select('has_low_quality_ocr')
+            .eq('movement_id', m.id);
 
-      setMovements(formattedMovements);
+          const hasLowQualityOCR = docs?.some(d => d.has_low_quality_ocr === true) || false;
+
+          return {
+            id: m.id,
+            entity_id: m.entity_id,
+            movement_type_id: m.movement_type_id,
+            subcategory_id: m.subcategory_id,
+            document_date: m.document_date,
+            description: m.description || '',
+            notes: m.notes || '',
+            created_at: m.created_at,
+            movement_type_name: m.movement_types?.name,
+            subcategory_name: m.movement_subcategories?.name,
+            has_low_quality_ocr: hasLowQualityOCR,
+          };
+        })
+      );
+
+      setMovements(movementsWithOCRStatus);
 
       // Fetch movement types
       const { data: typesData, error: typesError } = await supabase

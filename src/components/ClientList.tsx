@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../lib/supabase';
 import posthog from 'posthog-js';
-import { Plus, Search, Building2, AlertCircle, Edit2 } from 'lucide-react';
+import { Plus, Search, Building2, AlertCircle, Edit2, Trash2, Download } from 'lucide-react';
+import JSZip from 'jszip';
 
 type Client = Database['public']['Tables']['clients']['Row'];
 
@@ -18,6 +19,9 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [newClient, setNewClient] = useState({
     name: '',
     rut: '',
@@ -35,6 +39,7 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
       const { data, error } = await supabase
         .from('clients')
         .select('*')
+        .eq('is_active', true)
         .order('name');
 
       if (error) throw error;
@@ -109,6 +114,201 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
     setShowEditModal(true);
   };
 
+  const openDeleteModal = (client: Client, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingClient(client);
+    setShowDeleteModal(true);
+  };
+
+  const exportClientData = async (clientId: string, clientName: string) => {
+    setIsExporting(true);
+    try {
+      const zip = new JSZip();
+
+      // Create main folder
+      const clientFolder = zip.folder(clientName.replace(/[^a-z0-9]/gi, '_'));
+      if (!clientFolder) throw new Error('Could not create ZIP folder');
+
+      // 1. Export client info
+      const { data: client } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .single();
+
+      if (client) {
+        clientFolder.file('client_info.json', JSON.stringify(client, null, 2));
+      }
+
+      // 2. Get all entities
+      const { data: entities } = await supabase
+        .from('entities')
+        .select('*')
+        .eq('client_id', clientId);
+
+      if (entities && entities.length > 0) {
+        clientFolder.file('entities.json', JSON.stringify(entities, null, 2));
+
+        // 3. For each entity, get movements and documents
+        for (const entity of entities) {
+          const entityFolderName = `${entity.name.replace(/[^a-z0-9]/gi, '_')}_${entity.rut}`;
+          const entityFolder = clientFolder.folder(entityFolderName);
+
+          if (!entityFolder) continue;
+
+          // Get movements
+          const { data: movements } = await supabase
+            .from('entity_movements')
+            .select('*')
+            .eq('entity_id', entity.id);
+
+          if (movements && movements.length > 0) {
+            entityFolder.file('movements.json', JSON.stringify(movements, null, 2));
+          }
+
+          // Get documents
+          const { data: documents } = await supabase
+            .from('documents')
+            .select('*')
+            .eq('entity_id', entity.id);
+
+          if (documents && documents.length > 0) {
+            entityFolder.file('documents_metadata.json', JSON.stringify(documents, null, 2));
+
+            // Download actual files
+            const docsFolder = entityFolder.folder('files');
+            if (docsFolder) {
+              for (const doc of documents) {
+                try {
+                  const { data: fileData } = await supabase.storage
+                    .from('documents')
+                    .download(doc.file_path);
+
+                  if (fileData) {
+                    docsFolder.file(doc.file_name, fileData);
+                  }
+                } catch (error) {
+                  console.error(`Error downloading ${doc.file_name}:`, error);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Generate ZIP
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${clientName.replace(/[^a-z0-9]/gi, '_')}_export_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      return true;
+    } catch (error) {
+      console.error('Error exporting client data:', error);
+      alert('Error al exportar los datos del cliente');
+      return false;
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!deletingClient) return;
+
+    setIsExporting(true);
+    try {
+      // First export the data
+      const exported = await exportClientData(deletingClient.id, deletingClient.name);
+
+      if (!exported) {
+        setIsExporting(false);
+        return;
+      }
+
+      // Move client and related data to recycle bin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated');
+
+      // Get all entities
+      const { data: entities } = await supabase
+        .from('entities')
+        .select('id')
+        .eq('client_id', deletingClient.id);
+
+      const entityIds = entities?.map(e => e.id) || [];
+
+      // Get all movements
+      const { data: movements } = await supabase
+        .from('entity_movements')
+        .select('id')
+        .in('entity_id', entityIds);
+
+      const movementIds = movements?.map(m => m.id) || [];
+
+      // Get all documents
+      const { data: documents } = await supabase
+        .from('documents')
+        .select('id')
+        .in('entity_id', entityIds);
+
+      // Move documents to recycle bin
+      if (documents && documents.length > 0) {
+        const recycleBinEntries = documents.map(doc => ({
+          document_id: doc.id,
+          deleted_by: user.id,
+          deletion_reason: `Cliente eliminado: ${deletingClient.name}`,
+          can_restore: true,
+          auto_delete_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        }));
+
+        await supabase.from('document_recycle_bin').insert(recycleBinEntries);
+      }
+
+      // Soft delete: mark as inactive
+      await supabase
+        .from('entities')
+        .update({ is_active: false })
+        .in('id', entityIds);
+
+      await supabase
+        .from('clients')
+        .update({ is_active: false })
+        .eq('id', deletingClient.id);
+
+      // Log audit
+      await supabase.rpc('log_audit_action', {
+        p_user_id: user.id,
+        p_user_email: user.email || '',
+        p_action: 'DELETE',
+        p_entity_type: 'client',
+        p_entity_id: deletingClient.id,
+        p_entity_name: deletingClient.name,
+        p_metadata: {
+          exported: true,
+          entities_count: entityIds.length,
+          movements_count: movementIds.length,
+          documents_count: documents?.length || 0,
+        },
+      });
+
+      alert(`✅ Cliente "${deletingClient.name}" eliminado exitosamente.\n\nLos datos han sido exportados y el cliente ha sido enviado a la papelera.`);
+
+      setShowDeleteModal(false);
+      setDeletingClient(null);
+      fetchClients();
+    } catch (error: any) {
+      console.error('Error deleting client:', error);
+      alert(`Error al eliminar el cliente: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (client.rut && client.rut.includes(searchTerm))
@@ -169,13 +369,22 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
               className="border border-gray-200 rounded-lg p-6 hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer group relative"
             >
               {(userRole === 'admin' || userRole === 'rc_abogados') && (
-                <button
-                  onClick={(e) => openEditModal(client, e)}
-                  className="absolute top-4 right-4 p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Editar cliente"
-                >
-                  <Edit2 size={16} />
-                </button>
+                <div className="absolute top-4 right-4 flex gap-2">
+                  <button
+                    onClick={(e) => openEditModal(client, e)}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Editar cliente"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => openDeleteModal(client, e)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Eliminar cliente"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               )}
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
@@ -383,6 +592,84 @@ export default function ClientList({ onSelectClient, userRole }: ClientListProps
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && deletingClient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-100 rounded-full">
+                <Trash2 className="text-red-600" size={24} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Eliminar Cliente</h3>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                ¿Estás seguro de que deseas eliminar el cliente <strong>"{deletingClient.name}"</strong>?
+              </p>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-2">
+                  <Download className="text-blue-600 flex-shrink-0 mt-0.5" size={18} />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-semibold mb-1">Se exportarán los datos antes de eliminar:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Información del cliente</li>
+                      <li>Todas las sociedades y entidades</li>
+                      <li>Todas las gestiones registradas</li>
+                      <li>Todos los documentos y archivos</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="text-orange-600 flex-shrink-0 mt-0.5" size={18} />
+                  <div className="text-sm text-orange-800">
+                    <p className="font-semibold mb-1">Después de la exportación:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>El cliente y sus datos se moverán a la papelera</li>
+                      <li>Podrán restaurarse en los próximos 30 días</li>
+                      <li>Después de 30 días se eliminarán permanentemente</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeletingClient(null);
+                }}
+                disabled={isExporting}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteClient}
+                disabled={isExporting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isExporting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={18} />
+                    Exportar y Eliminar
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
