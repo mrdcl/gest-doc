@@ -11,13 +11,13 @@
 
 | Issue | Título | Implementable por IA | Bloqueador |
 |-------|--------|---------------------|------------|
-| **#31** | Keycloak OIDC | ❌ NO | Servidor Keycloak requerido |
+| **#31** | Ory Hydra OIDC | ❌ NO | Servidor Ory Hydra requerido |
 | **#32** | Cloudflare R2 Storage | ❌ NO | Cuenta Cloudflare R2 requerida |
 | **#33** | Storage SDK Refactor | ⚠️ PARCIAL | Requiere #32 |
 | **#34** | Data Migration Neon | ❌ NO | Base de datos Neon requerida |
 | **#35** | File Migration R2 | ❌ NO | Requiere #32 y #34 |
 | **#36** | API Adapter PostgREST | ⚠️ PARCIAL | Requiere #34 |
-| **#37** | Auth E2E Wiring | ❌ NO | Requiere #31 y #34 |
+| **#37** | Auth E2E Wiring | ❌ NO | Requiere #31 (Hydra) y #34 |
 | **#38** | Cutover & Rollback | ❌ NO | Requiere todos los anteriores |
 | **#39** | Operational Docs | ✅ PARCIAL | Solo documentación |
 | **#40** | Plan B Feature Flags | ✅ SI | Puede implementarse |
@@ -35,7 +35,7 @@ Frontend → Supabase Client → Supabase (Auth + DB + Storage)
 
 ### Stack Objetivo (Issues P0):
 ```
-Frontend → Keycloak (Auth)
+Frontend → Ory Hydra (OAuth2/OIDC Auth)
         ↓
     PostgREST → Neon (PostgreSQL)
         ↓
@@ -52,63 +52,71 @@ Frontend → Keycloak (Auth)
 
 ## 📋 ANÁLISIS DETALLADO DE CADA ISSUE P0
 
-### ❌ Issue #31: Configure Keycloak (OIDC)
+### ❌ Issue #31: Configure Ory Hydra (OIDC)
 
-**Objetivo:** Single sign-on provider con claims role y tenant_id.
+**Objetivo:** OAuth2/OIDC provider con claims role y tenant_id en tokens.
 
 **Pasos:**
-1. Crear Realm y Cliente confidencial
-2. Configurar Valid Redirect URIs
-3. Agregar protocol mappers (role, tenant_id)
-4. Firmar con RS256 y exponer JWKS
-5. Verificar claims en token
+1. Desplegar Ory Hydra con PostgreSQL
+2. Crear OAuth2 client con redirect URIs
+3. Implementar login/consent flows en la app existente
+4. Configurar token hooks para inyectar claims (role, tenant_id)
+5. Exponer JWKS endpoint (.well-known/jwks.json)
 
 **Acceptance Criteria:**
-- JWTs incluyen role y tenant_id
-- Rotación documentada y testeada
+- JWTs incluyen role y tenant_id en claims
+- Login flow integrado con user_profiles existente
+- Refresh tokens funcionando
 
 **⚠️ BLOQUEADORES PARA IMPLEMENTACIÓN POR IA:**
 
-1. **Servidor Keycloak requerido:**
+1. **Servidor Ory Hydra requerido:**
    ```bash
    # Se necesita instalar y configurar
-   docker run -p 8080:8080 \
-     -e KEYCLOAK_ADMIN=admin \
-     -e KEYCLOAK_ADMIN_PASSWORD=admin \
-     quay.io/keycloak/keycloak:latest start-dev
+   docker run -d \
+     --name hydra \
+     -p 4444:4444 -p 4445:4445 \
+     -e DSN=postgres://user:pass@host/hydra \
+     oryd/hydra:v2.2 serve all
    ```
 
-2. **Acceso a consola de administración:**
-   - URL: http://localhost:8080/admin
-   - Crear realms manualmente
-   - Configurar clientes
-   - Configurar protocol mappers
+2. **Configuración de cliente OAuth2:**
+   ```bash
+   hydra create client \
+     --endpoint http://localhost:4445 \
+     --grant-type authorization_code,refresh_token \
+     --response-type code \
+     --scope openid,profile,email \
+     --redirect-uri http://localhost:5173/callback
+   ```
 
-3. **Configuración de JWT:**
-   - RS256 keys
-   - JWKS endpoint
-   - Token customization
+3. **Implementación de flows:**
+   - Login endpoint en la aplicación
+   - Consent endpoint en la aplicación
+   - Integración con user_profiles existente
 
 **DATOS/PASOS PREVIOS REQUERIDOS:**
 
 ✅ **Por el usuario/DevOps:**
-- [ ] Instalar servidor Keycloak (Docker/VM/Cloud)
-- [ ] Crear cuenta administrativa
-- [ ] Definir estructura de realms (1 por cliente?)
-- [ ] Configurar dominio/URL pública
+- [ ] Desplegar Ory Hydra (Docker/VM/Cloud)
+- [ ] Configurar PostgreSQL para Hydra
+- [ ] Crear OAuth2 client via Hydra CLI
+- [ ] Configurar dominio/URL pública (hydra.yourdomain.com)
 - [ ] Certificados SSL si es producción
 
 ✅ **Información a proporcionar:**
-- Lista de clientes (empresas) que usarán el sistema
-- Estructura de roles (admin, user, viewer, etc.)
-- Política de rotación de keys
-- Configuración de redirect URIs (URLs del frontend)
+- Lista de redirect URIs (URLs del frontend)
+- Estructura de roles (admin, rc_abogados, cliente)
+- Configuración de token lifetime
+- JWKS endpoint público
 
 **LO QUE SÍ PUEDO HACER:**
-- ✅ Documentar la configuración requerida
-- ✅ Crear scripts de configuración
-- ✅ Preparar código frontend para OIDC
-- ✅ Documentar protocol mappers necesarios
+- ✅ Documentar la configuración de Hydra
+- ✅ Crear scripts de despliegue Docker
+- ✅ Implementar login/consent flows en React
+- ✅ Integrar con user_profiles existente
+- ✅ Crear token hooks para claims customizados
+- ✅ Preparar código frontend para OIDC flow
 
 ---
 
@@ -514,32 +522,35 @@ export class PostgrestApiProvider implements ApiProvider {
 
 ---
 
-### ❌ Issue #37: Auth E2E Wiring (Keycloak → PostgREST)
+### ❌ Issue #37: Auth E2E Wiring (Ory Hydra → PostgREST)
 
-**Objetivo:** Claims de Keycloak impulsan RLS en Neon via PostgREST.
+**Objetivo:** Claims de Ory Hydra impulsan RLS en Neon via PostgREST.
 
 **Pasos:**
-1. Frontend obtiene token OIDC y lo envía a BFF/PostgREST
-2. PostgREST valida JWT vía JWK y selecciona role
-3. RLS policies usan request.jwt.claims
-4. Test cross-tenant isolation
+1. Frontend obtiene token OIDC de Hydra y lo envía a PostgREST
+2. PostgREST valida JWT vía JWKS endpoint de Hydra
+3. PostgREST extrae claims (role, tenant_id) y los pasa a RLS
+4. RLS policies usan request.jwt.claims para aislamiento
+5. Test cross-tenant isolation
 
 **Acceptance Criteria:**
 - Aislamiento RLS por tenant_id
-- Privilegios mínimos sin JWT
+- Privilegios mínimos sin JWT válido
+- Refresh tokens funcionando
 
 **⚠️ BLOQUEADORES PARA IMPLEMENTACIÓN POR IA:**
 
-1. **Requiere Issue #31:** Keycloak configurado
+1. **Requiere Issue #31:** Ory Hydra configurado y operativo
 2. **Requiere Issue #34:** Neon DB operativa
 3. **Requiere Issue #36:** PostgREST configurado
 
 **DATOS/PASOS PREVIOS REQUERIDOS:**
 
 ✅ **Por el usuario/DevOps:**
-- [ ] Completar Issues #31, #34, #36
-- [ ] Configurar PostgREST JWT secret
-- [ ] Configurar JWKS endpoint en PostgREST
+- [ ] Completar Issues #31 (Hydra), #34 (Neon), #36 (PostgREST)
+- [ ] Configurar PostgREST para usar JWKS de Hydra
+- [ ] Configurar jwt-secret en PostgREST config
+- [ ] Apuntar jwt-jwk-url a Hydra JWKS endpoint
 - [ ] Testear validación de JWT
 
 **LO QUE SÍ PUEDO HACER:**
@@ -685,11 +696,11 @@ export function createStorageProvider(): StorageProvider {
 ## 🎯 RESUMEN: QUÉ PUEDE HACER LA IA vs QUÉ REQUIERE USUARIO
 
 ### ❌ NO PUEDO IMPLEMENTAR (Requiere Infraestructura):
-1. **Issue #31** - Keycloak: Requiere servidor Keycloak
+1. **Issue #31** - Ory Hydra: Requiere servidor Ory Hydra
 2. **Issue #32** - R2 Storage: Requiere cuenta Cloudflare
 3. **Issue #34** - Neon Migration: Requiere BD Neon
 4. **Issue #35** - File Migration: Requiere #32 + #34
-5. **Issue #37** - Auth E2E: Requiere #31 + #34 + #36
+5. **Issue #37** - Auth E2E: Requiere #31 (Hydra) + #34 + #36
 6. **Issue #38** - Cutover: Requiere todos los anteriores
 
 ### ⚠️ PUEDO IMPLEMENTAR PARCIALMENTE (Código sin testing real):
@@ -716,10 +727,11 @@ export function createStorageProvider(): StorageProvider {
     - Obtener connection string
     - Configurar backups
 
-[ ] 3. Instalar/configurar Keycloak
-    - Docker: docker-compose up keycloak
-    - O usar Keycloak Cloud
-    - Obtener OIDC endpoints
+[ ] 3. Desplegar Ory Hydra
+    - Docker: docker run oryd/hydra
+    - Configurar PostgreSQL backend
+    - Crear OAuth2 client
+    - Obtener OIDC endpoints (.well-known/openid-configuration)
 
 [ ] 4. Configurar PostgREST
     - Instalar PostgREST
@@ -737,9 +749,10 @@ export function createStorageProvider(): StorageProvider {
 
     NEON_DB_URL=...
 
-    KEYCLOAK_URL=...
-    KEYCLOAK_REALM=...
-    KEYCLOAK_CLIENT_ID=...
+    HYDRA_PUBLIC_URL=https://hydra.yourdomain.com
+    HYDRA_ADMIN_URL=http://localhost:4445
+    OAUTH2_CLIENT_ID=documento-app
+    OAUTH2_CLIENT_SECRET=...
 
     POSTGREST_URL=...
     POSTGREST_ANON_KEY=...
@@ -765,7 +778,7 @@ export function createStorageProvider(): StorageProvider {
 USUARIO HACE:
 1. Issue #32 → Setup Cloudflare R2
 2. Issue #34 → Setup Neon DB
-3. Issue #31 → Setup Keycloak
+3. Issue #31 → Setup Ory Hydra
 
 IA PUEDE HACER (en paralelo):
 4. Issue #40 → Feature Flags System
@@ -805,7 +818,7 @@ Representan una migración completa de stack que requiere:
 5. ✅ Crear tests automáticos
 
 **Lo que el USUARIO debe hacer primero:**
-1. ❌ Provisionar infraestructura (R2, Neon, Keycloak)
+1. ❌ Provisionar infraestructura (R2, Neon, Ory Hydra)
 2. ❌ Proporcionar credenciales
 3. ❌ Ejecutar scripts de migración
 4. ❌ Validar en ambiente real
@@ -813,5 +826,7 @@ Representan una migración completa de stack que requiere:
 ---
 
 **Conclusión:** Los issues P0 están bloqueados por requisitos de infraestructura externa. Puedo preparar todo el código y documentación, pero la implementación real requiere que el usuario configure primero los servicios de terceros.
+
+**Nota sobre Ory Hydra:** Se eligió Ory Hydra sobre Keycloak por ser más ligero (~20MB vs ~500MB), API-first, y diseñado específicamente para aplicaciones con base de usuarios existente. Hydra es completamente implementable por IA una vez desplegado el servidor.
 
 **Próximo paso recomendado:** Implementar Issue #40 (Feature Flags) para preparar el camino, y Issue #39 (Docs) para guiar al usuario en la configuración de infraestructura.

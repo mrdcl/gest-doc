@@ -75,7 +75,7 @@ export default function FeatureFlagsAdmin() {
 
   const flagCategories = {
     'Provider Switches': [
-      { key: 'useKeycloakAuth' as const, label: 'Use Keycloak Auth', description: 'Switch from Supabase Auth to Keycloak OIDC' },
+      { key: 'useHydraAuth' as const, label: 'Use Ory Hydra Auth', description: 'Switch from Supabase Auth to Ory Hydra OAuth2/OIDC' },
       { key: 'useCloudflareR2' as const, label: 'Use Cloudflare R2', description: 'Switch from Supabase Storage to Cloudflare R2' },
       { key: 'useNeonDatabase' as const, label: 'Use Neon Database', description: 'Switch from Supabase DB to Neon PostgreSQL' },
       { key: 'usePostgREST' as const, label: 'Use PostgREST API', description: 'Switch from Supabase Client to direct PostgREST' },

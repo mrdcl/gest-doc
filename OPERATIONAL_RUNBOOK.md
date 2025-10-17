@@ -81,8 +81,8 @@ Document management system for corporate legal entities with hierarchical client
         ┌──────────┴──────────┐
         ↓                     ↓
 ┌──────────────┐      ┌──────────────┐
-│   Keycloak   │      │ PostgREST +  │
-│  (Auth OIDC) │      │ Neon DB      │
+│  Ory Hydra   │      │ PostgREST +  │
+│(OAuth2/OIDC) │      │ Neon DB      │
 └──────────────┘      └──────────────┘
                               │
                       ┌───────┴────────┐
@@ -1089,8 +1089,8 @@ if (featureFlags.isEnabled('enableSemanticSearch')) {
   // Use semantic search
 }
 
-// Switch to Keycloak auth
-featureFlags.enable('useKeycloakAuth');
+// Switch to Ory Hydra auth
+featureFlags.enable('useHydraAuth');
 
 // Export configuration
 const config = featureFlags.exportConfig();

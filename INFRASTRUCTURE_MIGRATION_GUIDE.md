@@ -1,5 +1,5 @@
 # Infrastructure Migration Guide
-## From Supabase to Neon + Cloudflare R2 + Keycloak
+## From Supabase to Neon + Cloudflare R2 + Ory Hydra
 
 This guide provides detailed instructions for migrating the document management system from Supabase to a self-hosted infrastructure stack.
 
@@ -29,7 +29,7 @@ This guide provides detailed instructions for migrating the document management 
 - **API**: Supabase Client SDK
 
 ### Target Stack
-- **Authentication**: Keycloak (OIDC)
+- **Authentication**: Ory Hydra (OAuth2/OIDC)
 - **Database**: Neon PostgreSQL
 - **Storage**: Cloudflare R2
 - **API**: PostgREST + Custom Adapters
@@ -38,12 +38,12 @@ This guide provides detailed instructions for migrating the document management 
 - **Phase 1**: Infrastructure Setup (1-2 days)
 - **Phase 2**: Database Migration (1 day)
 - **Phase 3**: Storage Migration (2-3 days depending on data size)
-- **Phase 4**: Auth Migration (1 day)
+- **Phase 4**: Auth Migration (1-2 days)
 - **Phase 5**: Application Updates (2 days)
 - **Phase 6**: Testing (2-3 days)
 - **Phase 7**: Cutover (1 day)
 
-**Total Estimated Time**: 10-14 days
+**Total Estimated Time**: 8-12 days (Ory Hydra is faster to setup than Keycloak)
 
 ### Risk Assessment
 - **High Risk**: Data loss during storage migration
@@ -58,7 +58,7 @@ This guide provides detailed instructions for migrating the document management 
 - [ ] Supabase project admin access
 - [ ] Neon account with billing setup
 - [ ] Cloudflare account with R2 enabled
-- [ ] Keycloak server with admin access
+- [ ] Ory Hydra server with admin access
 - [ ] Production deployment credentials
 
 ### Required Tools
@@ -77,7 +77,7 @@ wrangler --version
 ### Infrastructure Costs
 - **Neon**: ~$20-50/month (Starter plan)
 - **Cloudflare R2**: ~$15/TB/month storage + $0.36/million requests
-- **Keycloak**: Self-hosted (VM costs ~$20-50/month)
+- **Ory Hydra**: Self-hosted (VM costs ~$10-20/month, much lighter than Keycloak)
 
 ---
 
@@ -136,84 +136,96 @@ wrangler r2 bucket cors set documents-production \
   --config r2-cors-config.json
 ```
 
-### Step 1.3: Setup Keycloak
+### Step 1.3: Setup Ory Hydra
 
 #### Docker Compose Setup
 ```yaml
-version: '3'
+version: '3.8'
 
 services:
-  keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: changeme123!
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak
-      KC_HOSTNAME: auth.your-domain.com
-      KC_PROXY: edge
+  hydra:
+    image: oryd/hydra:v2.2
     ports:
-      - "8080:8080"
+      - "4444:4444" # Public port
+      - "4445:4445" # Admin port
     command:
-      - start
-      - --optimized
+      serve all --dev
+    environment:
+      URLS_SELF_ISSUER: https://hydra.your-domain.com
+      URLS_CONSENT: https://your-app.com/consent
+      URLS_LOGIN: https://your-app.com/login
+      DSN: postgres://hydra:secret@postgres:5432/hydra?sslmode=disable
+      SECRETS_SYSTEM: your-system-secret-min-32-chars
+      OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: your-salt-value
+      SERVE_COOKIES_SAME_SITE_MODE: Lax
     depends_on:
-      - db
+      - hydra-migrate
+    restart: unless-stopped
 
-  db:
+  hydra-migrate:
+    image: oryd/hydra:v2.2
+    environment:
+      DSN: postgres://hydra:secret@postgres:5432/hydra?sslmode=disable
+    command:
+      migrate sql -e --yes
+    depends_on:
+      - postgres
+
+  postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: hydra
     volumes:
-      - keycloak_data:/var/lib/postgresql/data
+      - hydra_data:/var/lib/postgresql/data
 
 volumes:
-  keycloak_data:
+  hydra_data:
 ```
 
 ```bash
-# Start Keycloak
+# Start Ory Hydra
 docker-compose up -d
 
 # Wait for startup
-sleep 30
+sleep 15
 
-# Access admin console
-open http://localhost:8080/admin
+# Verify Hydra is running
+curl http://localhost:4444/.well-known/openid-configuration
+
+# Create OAuth2 client
+docker-compose exec hydra \
+  hydra create client \
+    --endpoint http://localhost:4445 \
+    --id documento-web-app \
+    --secret your-client-secret \
+    --grant-type authorization_code,refresh_token \
+    --response-type code,id_token \
+    --scope openid,offline,profile,email \
+    --redirect-uri https://your-app.com/callback
 ```
 
-#### Configure Keycloak Realm
+#### Key Differences from Keycloak
 
-1. **Create Realm**
-   - Navigate to: http://localhost:8080/admin
-   - Click "Create Realm"
-   - Name: `documento-management`
-   - Click "Create"
+**Advantages of Ory Hydra:**
+- **Lightweight**: ~20MB container vs ~500MB for Keycloak
+- **API-First**: Everything configurable via API
+- **No Admin UI Needed**: Configure via CLI/API
+- **Faster Startup**: ~5 seconds vs ~30+ seconds
+- **Lower Resource Usage**: ~50MB RAM vs ~500MB
 
-2. **Create Client**
-   - Go to: Clients → Create Client
-   - Client ID: `documento-web-app`
-   - Client Protocol: `openid-connect`
-   - Access Type: `public`
-   - Valid Redirect URIs: `https://your-app.com/*`
-   - Web Origins: `https://your-app.com`
-   - Save
+**What Hydra Does NOT Include:**
+- ❌ No built-in user management (use your existing `user_profiles` table)
+- ❌ No admin UI (all config via API/CLI)
+- ❌ No built-in login forms (implement in your React app)
 
-3. **Configure Authentication Flow**
-   - Go to: Authentication → Flows
-   - Copy "Browser" flow
-   - Name: `documento-browser-flow`
-   - Add: OTP Form (for 2FA support)
-   - Set as default
-
-4. **Create User Federation**
-   - Go to: User Federation
-   - Add provider: "User Storage SPI"
-   - Configure to sync with existing user database
+**This is PERFECT for your use case because:**
+- ✅ You already have `user_profiles` table with users
+- ✅ You already have login/signup UI in React
+- ✅ Hydra only handles OAuth2/OIDC tokens
+- ✅ Much easier to implement and maintain
 
 ### Step 1.4: Setup PostgREST
 
@@ -522,74 +534,107 @@ COPY (
 EOF
 ```
 
-### Step 4.2: Import Users to Keycloak
+### Step 4.2: Keep User Data in Existing Database
+
+**Important: With Ory Hydra, you DON'T migrate users to an external system!**
+
+Hydra is a **headless OAuth2 server** - it doesn't store users. Instead:
+- ✅ Keep `user_profiles` table in your database (Neon)
+- ✅ Keep existing authentication logic
+- ✅ Hydra only manages OAuth2/OIDC tokens
+
+**No user migration needed!** This is a major advantage of Hydra.
+
+### Step 4.3: Implement Login/Consent Flows
+
+Create endpoints in your application to handle Hydra's login and consent challenges:
 
 ```typescript
-// import-users-keycloak.ts
-import KcAdminClient from '@keycloak/keycloak-admin-client';
-import { parse } from 'csv-parse/sync';
-import { readFileSync } from 'fs';
+// src/lib/hydra.ts
+const HYDRA_ADMIN_URL = import.meta.env.VITE_HYDRA_ADMIN_URL || 'http://localhost:4445';
 
-const kcAdminClient = new KcAdminClient({
-  baseUrl: 'http://localhost:8080',
-  realmName: 'documento-management',
-});
+export async function acceptLoginRequest(
+  challenge: string,
+  userId: string,
+  remember: boolean = true
+) {
+  const response = await fetch(
+    `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/login/accept?login_challenge=${challenge}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: userId,
+        remember,
+        remember_for: 3600,
+        context: {
+          // Add custom claims here
+        },
+      }),
+    }
+  );
+  return response.json();
+}
 
-await kcAdminClient.auth({
-  username: 'admin',
-  password: process.env.KEYCLOAK_ADMIN_PASSWORD!,
-  grantType: 'password',
-  clientId: 'admin-cli',
-});
-
-const users = parse(readFileSync('users_export.csv'), {
-  columns: true,
-});
-
-for (const user of users) {
-  try {
-    // Create user in Keycloak
-    await kcAdminClient.users.create({
-      realm: 'documento-management',
-      username: user.email,
-      email: user.email,
-      firstName: user.full_name?.split(' ')[0],
-      lastName: user.full_name?.split(' ').slice(1).join(' '),
-      enabled: true,
-      emailVerified: !!user.email_confirmed_at,
-      attributes: {
-        original_user_id: user.id,
-        role: user.role,
-        migrated_at: new Date().toISOString(),
-      },
-      // Note: Passwords cannot be directly migrated
-      // Users will need to reset password on first login
-      requiredActions: ['UPDATE_PASSWORD'],
-    });
-
-    console.log(`✓ Imported: ${user.email}`);
-  } catch (error) {
-    console.error(`✗ Failed: ${user.email}`, error);
-  }
+export async function acceptConsentRequest(
+  challenge: string,
+  grantScope: string[],
+  userId: string,
+  role: string,
+  tenantId?: string
+) {
+  const response = await fetch(
+    `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/accept?consent_challenge=${challenge}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_scope: grantScope,
+        grant_access_token_audience: ['https://api.yourdomain.com'],
+        remember: true,
+        remember_for: 3600,
+        session: {
+          id_token: {
+            role,
+            tenant_id: tenantId,
+          },
+          access_token: {
+            role,
+            tenant_id: tenantId,
+          },
+        },
+      }),
+    }
+  );
+  return response.json();
 }
 ```
 
-### Step 4.3: Configure OIDC Client
+### Step 4.4: Configure Hydra OIDC
 
 ```bash
-# Export Keycloak OIDC configuration
+# Get Hydra OIDC configuration
 curl -X GET \
-  "http://localhost:8080/realms/documento-management/.well-known/openid-configuration" \
-  > keycloak-oidc-config.json
+  "http://localhost:4444/.well-known/openid-configuration" \
+  > hydra-oidc-config.json
 
 # Extract important values
-cat keycloak-oidc-config.json | jq '{
+cat hydra-oidc-config.json | jq '{
   issuer,
   authorization_endpoint,
   token_endpoint,
   userinfo_endpoint,
   jwks_uri
 }'
+
+# Example output:
+# {
+#   "issuer": "https://hydra.yourdomain.com",
+#   "authorization_endpoint": "https://hydra.yourdomain.com/oauth2/auth",
+#   "token_endpoint": "https://hydra.yourdomain.com/oauth2/token",
+#   "userinfo_endpoint": "https://hydra.yourdomain.com/userinfo",
+#   "jwks_uri": "https://hydra.yourdomain.com/.well-known/jwks.json"
+# }
 ```
 
 ---
@@ -599,8 +644,8 @@ cat keycloak-oidc-config.json | jq '{
 ### Step 5.1: Install New Dependencies
 
 ```bash
-# Add Keycloak adapter
-npm install keycloak-js
+# Add OAuth2 client (no Hydra-specific SDK needed)
+npm install oauth4webapi
 
 # Add R2 SDK
 npm install @aws-sdk/client-s3
@@ -620,15 +665,16 @@ Already implemented in the codebase:
 ```bash
 # .env.production
 # Feature Flags
-VITE_USE_KEYCLOAK_AUTH=false  # Will switch to true after migration
+VITE_USE_HYDRA_AUTH=false     # Will switch to true after migration
 VITE_USE_CLOUDFLARE_R2=false  # Will switch to true after migration
 VITE_USE_NEON_DATABASE=false  # Will switch to true after migration
 VITE_USE_POSTGREST=false      # Will switch to true after migration
 
-# Keycloak Configuration
-VITE_KEYCLOAK_URL=https://auth.your-domain.com
-VITE_KEYCLOAK_REALM=documento-management
-VITE_KEYCLOAK_CLIENT_ID=documento-web-app
+# Ory Hydra Configuration
+VITE_HYDRA_PUBLIC_URL=https://hydra.your-domain.com
+VITE_HYDRA_ADMIN_URL=http://hydra-admin:4445  # Backend only
+VITE_OAUTH2_CLIENT_ID=documento-web-app
+VITE_OAUTH2_CLIENT_SECRET=your-client-secret
 
 # Cloudflare R2 Configuration
 VITE_R2_ACCOUNT_ID=your-account-id

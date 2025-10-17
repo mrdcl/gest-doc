@@ -1,5 +1,5 @@
 interface FeatureFlags {
-  useKeycloakAuth: boolean;
+  useHydraAuth: boolean;
   useCloudflareR2: boolean;
   useNeonDatabase: boolean;
   usePostgREST: boolean;
@@ -13,15 +13,16 @@ interface FeatureFlags {
 
 interface ProviderConfig {
   auth: {
-    provider: 'supabase' | 'keycloak';
+    provider: 'supabase' | 'hydra';
     supabase?: {
       url: string;
       anonKey: string;
     };
-    keycloak?: {
-      url: string;
-      realm: string;
+    hydra?: {
+      publicUrl: string;
+      adminUrl: string;
       clientId: string;
+      clientSecret: string;
     };
   };
   storage: {
@@ -66,7 +67,7 @@ class FeatureFlagManager {
   private loadFlags(): FeatureFlags {
     const stored = localStorage.getItem('feature_flags');
     const defaults: FeatureFlags = {
-      useKeycloakAuth: false,
+      useHydraAuth: false,
       useCloudflareR2: false,
       useNeonDatabase: false,
       usePostgREST: false,
@@ -203,8 +204,8 @@ class FeatureFlagManager {
     this.saveConfig();
   }
 
-  getAuthProvider(): 'supabase' | 'keycloak' {
-    return this.flags.useKeycloakAuth ? 'keycloak' : 'supabase';
+  getAuthProvider(): 'supabase' | 'hydra' {
+    return this.flags.useHydraAuth ? 'hydra' : 'supabase';
   }
 
   getStorageProvider(): 'supabase' | 'r2' {
