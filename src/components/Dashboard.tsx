@@ -13,6 +13,7 @@ import TwoFactorAuth from './TwoFactorAuth';
 import NotificationCenter from './NotificationCenter';
 import TagManager from './TagManager';
 import RecycleBin from './RecycleBin';
+import FeatureFlagsAdmin from './FeatureFlagsAdmin';
 import { useNotifications } from '../hooks/useNotifications';
 
 type ViewState =
@@ -22,7 +23,8 @@ type ViewState =
   | { type: 'users' }
   | { type: 'audit' }
   | { type: 'tags' }
-  | { type: 'recycle' };
+  | { type: 'recycle' }
+  | { type: 'settings' };
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth();
@@ -185,6 +187,16 @@ export default function Dashboard() {
                               <RefreshCw className="w-4 h-4" />
                               Reprocesar OCR
                             </button>
+                            <button
+                              onClick={() => {
+                                setViewState({ type: 'settings' });
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                            >
+                              <Settings className="w-4 h-4" />
+                              Configuración de Sistema
+                            </button>
                           </div>
                           <div className="border-t border-gray-200"></div>
                         </>
@@ -269,6 +281,18 @@ export default function Dashboard() {
               ← Volver
             </button>
             <RecycleBin />
+          </div>
+        )}
+
+        {viewState.type === 'settings' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <button
+              onClick={() => setViewState({ type: 'clients' })}
+              className="mb-6 p-2 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center gap-2 text-gray-600"
+            >
+              ← Volver
+            </button>
+            <FeatureFlagsAdmin />
           </div>
         )}
       </main>
