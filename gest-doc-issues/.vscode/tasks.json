@@ -1,0 +1,86 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "GH: Crear labels (bash)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd ${workspaceFolder}/gest-doc-issues && chmod +x *.sh && ./create_labels.sh"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "GH: Crear milestones (bash)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd ${workspaceFolder}/gest-doc-issues && chmod +x *.sh && ./create_milestones.sh"
+      ],
+      "dependsOn": [
+        "GH: Crear labels (bash)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "GH: Crear issues (bash)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd ${workspaceFolder}/gest-doc-issues && chmod +x *.sh && ./create_issues.sh"
+      ],
+      "dependsOn": [
+        "GH: Crear milestones (bash)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "GH: Crear labels (PowerShell)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/gest-doc-issues/create_labels.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "GH: Crear milestones (PowerShell)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/gest-doc-issues/create_milestones.ps1"
+      ],
+      "dependsOn": [
+        "GH: Crear labels (PowerShell)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "GH: Crear issues (PowerShell)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/gest-doc-issues/create_issues.ps1"
+      ],
+      "dependsOn": [
+        "GH: Crear milestones (PowerShell)"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
